@@ -14,7 +14,8 @@ struct Vertex{
     //Vertex(bool _isPipe = false):is_pipe(_isPipe){}
     string id;
     string tag;
-    bool is_pipe = false;
+    string dwg;
+    //bool is_pipe = false;
     bool operator==(const Vertex& rhs) const {return this->id == rhs.id;}
 };
 
@@ -65,15 +66,17 @@ void CreateGraphFromCSV(Graph& G, ifstream& file)
         if (line =="") continue;
         stringstream ss(line);
         string crap;
+        string dwg;
         Vertex pipe;
         Vertex other;
 
         getline(ss, pipe.tag, ';');
         getline(ss, pipe.id, ';');
         getline(ss, crap, ';');
-        getline(ss, crap, ';');
+        getline(ss, dwg, ';');
         getline(ss, other.tag, ';');
         getline(ss, other.id, ';');
+        other.dwg = pipe.dwg = dwg;
 
         AddVertex(G,pipe,other);
         AddVertex(G,other,pipe);
@@ -92,16 +95,16 @@ void PrintGraph(const Graph& G){
     }
 }
 
-bool GetSubgraph(const Vertex& u, const Vertex& target, const Graph& G, Graph& H,const forward_list<string>& blacklist, deque<Vertex> stack = deque<Vertex>())
+bool GetSubgraph(const Vertex& u, const Vertex& target, const Graph& G, Graph& H,const forward_list<string>& whitelist, deque<Vertex> stack = deque<Vertex>())
 {
     if (u == target) return true;
-    if ( find( blacklist.begin(), blacklist.end(), u.id ) != blacklist.end() ) return false;
+    if ( find( whitelist.begin(), whitelist.end(), u.dwg ) == whitelist.end() ) return false;
 
     stack.push_front(u);
     bool is_path = false;
     for( auto& v : G.at(u))
     {
-        if ( find( stack.begin(), stack.end(), v) == stack.end() && GetSubgraph(v,target,G,H,blacklist,stack) )
+        if ( find( stack.begin(), stack.end(), v) == stack.end() && GetSubgraph(v,target,G,H,whitelist,stack) )
         {
             AddVertex(H,u,v);
             AddVertex(H,v,u);
@@ -149,19 +152,20 @@ bool ProcessInput(const Graph& G){
         Graph H;
         Vertex start, target;
         getline(s, start.id, ' ');
+        getline(s, start.dwg, ' ');
         getline(s, target.id, ' ');
 
         string data;
-        forward_list<string> blacklist;
-        cout<<"Enter excluded Ids list ('q' to finish)\n";
+        forward_list<string> whitelist;
+        cout<<"Enter allowed drawings list, q to finish.\n";
         while (data != "q")
         {
             cout<< ">";
             cin>> data;
-            if ( data != "q" ) blacklist.push_front(data);
+            if ( data != "q" ) whitelist.push_front(data);
         }
         auto begin = clock();
-        GetSubgraph(start,target,G,H, blacklist);
+        GetSubgraph(start,target,G,H, whitelist);
         PrintGraph(H);
         cout<< "Command completed in " << (clock() - begin) / static_cast<double>(CLOCKS_PER_SEC) << " seconds\n";
         return true;

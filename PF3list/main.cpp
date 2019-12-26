@@ -11,6 +11,7 @@ struct data_line
 {
     string tag_pipe;
     string tag_other;
+    string dwg;
     string pos;
     string pipe_id;
     string other_id;
@@ -19,9 +20,8 @@ ostream & operator<<(ostream & os, const data_line & d)
 {
     os<< d.tag_pipe << "\t" << d.pipe_id << "\t"
       << d.tag_other << "\t" << d.other_id << "\t"
-      << d.pos
+      << d.pos << "\t" << d.dwg;
 
-         ;
     return os;
 }
 
@@ -46,6 +46,20 @@ void print_line(const forward_list<data_line> & list, string data)
     cout << line_num << "\t" << (*it) << endl;
 }
 
+void print_dwg(const forward_list<data_line> & list, string data)
+{
+    int line = 2;
+    int found = 0;
+    for(const auto& d: list ){
+        if( d.dwg == data ) {
+            cout << line << "\t" << d << endl;
+            found++;
+        }
+        line++;
+    }
+    cout << found << " occurences found.\n";
+}
+
 const char * usage = "\
 PF3 - read and navigate through PF3 data\n\
 usage: PF3 <file name>\n\
@@ -55,6 +69,7 @@ commands:\n\
     pi <id> : lists occurences of pipe id  = <id>\n\
     oi <id> : lists occurences of other id = <id>\n\
     l <line>: lists contents of line <line>\n\
+    d <dwg> : lists lines where drawing = <dwg>\n\
     q       : quit\n";
 
 
@@ -89,7 +104,7 @@ int main(int argc, char * argv[]){
         getline(s, d.tag_pipe, ';');
         getline(s, d.pipe_id, ';');
         getline(s, crap, ';');
-        getline(s, crap, ';');
+        getline(s, d.dwg, ';');
         getline(s, d.tag_other, ';');
         getline(s, d.other_id, ';');
         getline(s, d.pos, ';');
@@ -113,6 +128,7 @@ int main(int argc, char * argv[]){
         if ( op=="o"  ) {print_data(list, offsetof(data_line, tag_other), data );continue;}
         if ( op=="pi" ) {print_data(list, offsetof(data_line, pipe_id), data );continue;}
         if ( op=="oi" ) {print_data(list, offsetof(data_line, other_id), data );continue;}
+        if (op=="d") print_dwg(list,data);
         if (op=="l") print_line(list,data);
 
     }while(op != "q");
