@@ -5,26 +5,27 @@
 #include <forward_list>
 #include <sstream>
 #include <fstream>
+#include <algorithm>
+#include <deque>
 
 using namespace std;
 
-struct Node{
-    Node(bool _isPipe = false):is_pipe(_isPipe){}
+struct Vertex{
+    //Vertex(bool _isPipe = false):is_pipe(_isPipe){}
     string id;
     string tag;
     bool is_pipe = false;
-    bool visited = false;
-    shared_ptr<Node> next;
-    bool operator==(const Node& rhs) const {return this->id == rhs.id;}
+    bool operator==(const Vertex& rhs) const {return this->id == rhs.id;}
 };
-struct hash_node{
-    size_t operator()(const Node& N) const{
+
+struct hashVertex{
+    size_t operator()(const Vertex& v) const{
         hash<string> hstr;
-        return hstr(N.id);
+        return hstr(v.id);
     }
 };
-using AdjList = forward_list<Node>;
-using Graph = unordered_map<Node,AdjList,hash_node>;
+using AdjacencyList = forward_list<Vertex>;
+using Graph = unordered_map<Vertex,AdjacencyList,hashVertex>;
 
 const char * usage = "\
 PF3 - read and navigate through PF3 data\n\
@@ -33,25 +34,27 @@ commands:\n\
     <id> : lists adjacency list of of element <id>\n\
     q    : quit\n";
 
-void insert_node(Graph& G, Node& U, Node& V){
+void AddVertex(Graph& G, const Vertex& u, const Vertex& v){
 
-    auto it = G.find(U);
+    auto it = G.find(u);
 
-    // if the element is not yet in the map as a root element
+    // if the ID is not yet in the Graph as a root element
     // insert it as a root in the list
     if( it == G.end() ){
-        AdjList L;
-        L.push_front(V);
-        G.insert( pair<Node,AdjList>(U,L) );
+        AdjacencyList L;
+        L.push_front(v);
+        G.insert( pair<Vertex,AdjacencyList>(u,L) );
     }
     else
     {
-        it->second.push_front(V);
+        AdjacencyList& L = it->second;
+        if ( find( L.begin(),L.end(), v ) == L.end() )
+            it->second.push_front(v);
     }
 
 }
 
-void read_graph(Graph& G, ifstream& file)
+void CreateGraphFromCSV(Graph& G, ifstream& file)
 {
     auto begin = clock();
     string line;
@@ -59,39 +62,78 @@ void read_graph(Graph& G, ifstream& file)
     getline(file,line);
     while ( getline(file,line))
     {
+        if (line =="") continue;
         stringstream ss(line);
         string crap;
-        Node P(true);
-        Node O;
+        Vertex pipe;
+        Vertex other;
 
-        getline(ss, P.tag, ';');
-        getline(ss, P.id, ';');
+        getline(ss, pipe.tag, ';');
+        getline(ss, pipe.id, ';');
         getline(ss, crap, ';');
         getline(ss, crap, ';');
-        getline(ss, O.tag, ';');
-        getline(ss, O.id, ';');
+        getline(ss, other.tag, ';');
+        getline(ss, other.id, ';');
 
-        insert_node(G,P,O);
-        insert_node(G,O,P);
+        AddVertex(G,pipe,other);
+        AddVertex(G,other,pipe);
 
         counter++;
     }
     cout<< counter << " lines of data read in " << (clock() - begin) / static_cast<double>(CLOCKS_PER_SEC) << " seconds\n";
     cout<< G.size() << " root elements found.\n";
 }
+void PrintGraph(const Graph& G){
+    for(auto& p : G){
+        cout << p.first.id << " - ";
+        for(auto& v : p.second)
+            cout << v.id << " ";
+        cout << endl;
+    }
+}
 
-bool process_input(const Graph& G){
+bool GetSubgraph(const Vertex& u, const Vertex& target, const Graph& G, Graph& H,const forward_list<string>& blacklist, deque<Vertex> stack = deque<Vertex>())
+{
+    if (u == target) return true;
+    if ( find( blacklist.begin(), blacklist.end(), u.id ) != blacklist.end() ) return false;
+
+    stack.push_front(u);
+    bool is_path = false;
+    for( auto& v : G.at(u))
+    {
+        if ( find( stack.begin(), stack.end(), v) == stack.end() && GetSubgraph(v,target,G,H,blacklist,stack) )
+        {
+            AddVertex(H,u,v);
+            AddVertex(H,v,u);
+            is_path = true;
+        }
+
+    }
+    stack.pop_front();
+    return is_path;
+}
+
+
+bool ProcessInput(const Graph& G){
     cout << ">";
-    string data;
-    getline(cin,data);
+    string line;
+    getline(cin,line);
+    stringstream s(line);
+    string command;
+    getline(s, command, ' ');
 
-    if (data == "") return true;
 
-    if (data=="q") return false;
-    else{
-        Node n;
-        n.id = data;
-        auto it = G.find(n);
+    if (line == "") return true;
+    if (command=="q") return false;
+
+    if(command=="f"){
+
+        string id;
+        getline(s, id, ' ');
+
+        Vertex v;
+        v.id = id;
+        auto it = G.find(v);
         if ( it != G.end()){
             for(auto& a : it->second)
             {
@@ -99,11 +141,35 @@ bool process_input(const Graph& G){
             }
         }
         else{
-            cout << "Id not found: " << data << endl;
+            cout << "Id not found: " << id << endl;
         }
         return true;
     }
+    if (command=="p"){
+        Graph H;
+        Vertex start, target;
+        getline(s, start.id, ' ');
+        getline(s, target.id, ' ');
+
+        string data;
+        forward_list<string> blacklist;
+        cout<<"Enter excluded Ids list ('q' to finish)\n";
+        while (data != "q")
+        {
+            cout<< ">";
+            cin>> data;
+            if ( data != "q" ) blacklist.push_front(data);
+        }
+        auto begin = clock();
+        GetSubgraph(start,target,G,H, blacklist);
+        PrintGraph(H);
+        cout<< "Command completed in " << (clock() - begin) / static_cast<double>(CLOCKS_PER_SEC) << " seconds\n";
+        return true;
+    }
+    return true;
 }
+
+
 
 int main(int argc, char* argv[])
 {
@@ -119,10 +185,11 @@ int main(int argc, char* argv[])
     }
 
     Graph G;
-    read_graph(G,file);
+    CreateGraphFromCSV(G,file);
+    //PrintGraph(G);
 
     string op;
-    while( process_input(G) );
+    while( ProcessInput(G) );
 
     return 0;
 
