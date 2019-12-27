@@ -11,11 +11,13 @@
 using namespace std;
 
 struct Vertex{
-    //Vertex(bool _isPipe = false):is_pipe(_isPipe){}
+    Vertex(bool _isPipe = false):is_pipe(_isPipe){}
     string id;
     string tag;
     string dwg;
-    //bool is_pipe = false;
+    string pos;
+    string type;
+    bool is_pipe = false;
     bool operator==(const Vertex& rhs) const {return this->id == rhs.id;}
 };
 
@@ -65,18 +67,22 @@ void CreateGraphFromCSV(Graph& G, ifstream& file)
     {
         if (line =="") continue;
         stringstream ss(line);
-        string crap;
-        string dwg;
-        Vertex pipe;
+        string s;
+        Vertex pipe(true);
         Vertex other;
 
         getline(ss, pipe.tag, ';');
         getline(ss, pipe.id, ';');
-        getline(ss, crap, ';');
-        getline(ss, dwg, ';');
+        getline(ss, s, ';');
+        getline(ss, s, ';');
+        other.dwg = pipe.dwg = s;
+
         getline(ss, other.tag, ';');
         getline(ss, other.id, ';');
-        other.dwg = pipe.dwg = dwg;
+        getline(ss, s, ';');
+        other.pos = pipe.pos = s;
+        getline(ss, s, ';');
+        other.type = pipe.type = s; // TODO: correct after change DB dump
 
         AddVertex(G,pipe,other);
         AddVertex(G,other,pipe);
@@ -99,6 +105,7 @@ bool GetSubgraph(const Vertex& u, const Vertex& target, const Graph& G, Graph& H
 {
     if (u == target) return true;
     if ( find( whitelist.begin(), whitelist.end(), u.dwg ) == whitelist.end() ) return false;
+    if ( u.is_pipe && u.type == "Secondary Piping") return false;
 
     stack.push_front(u);
     bool is_path = false;
@@ -115,6 +122,7 @@ bool GetSubgraph(const Vertex& u, const Vertex& target, const Graph& G, Graph& H
     stack.pop_front();
     return is_path;
 }
+
 
 
 bool ProcessInput(const Graph& G){
@@ -152,20 +160,27 @@ bool ProcessInput(const Graph& G){
         Graph H;
         Vertex start, target;
         getline(s, start.id, ' ');
-        getline(s, start.dwg, ' ');
         getline(s, target.id, ' ');
 
         string data;
-        forward_list<string> whitelist;
-        cout<<"Enter allowed drawings list, q to finish.\n";
+        forward_list<string> wl; // white list
+        //cout<<"Enter allowed drawings list, q to finish.\n";
+        getline(s, data, ' ');
         while (data != "q")
         {
-            cout<< ">";
-            cin>> data;
-            if ( data != "q" ) whitelist.push_front(data);
+            wl.push_front(data);
+            getline(s, data, ' ');
         }
+
+        // sanity check
+        Graph::const_iterator sit, tit;
+        if ( (sit = G.find(start)) == G.end() ) {cout << "Start vertex not found.\n";return true;}
+        if ( (tit = G.find(target)) == G.end() ){cout << "Target vertex not found.\n";return true;}
+        if ( find(wl.begin(),wl.end(), sit->first.dwg) == wl.end()) {cout << "Start iten dwg not in allowed list.\n";return true;}
+        if ( find(wl.begin(),wl.end(), tit->first.dwg) == wl.end()) {cout << "Target iten dwg not in allowed list.\n";return true;}
+
         auto begin = clock();
-        GetSubgraph(start,target,G,H, whitelist);
+        GetSubgraph(sit->first,tit->first,G,H, wl);
         PrintGraph(H);
         cout<< "Command completed in " << (clock() - begin) / static_cast<double>(CLOCKS_PER_SEC) << " seconds\n";
         return true;

@@ -13,6 +13,7 @@ struct data_line
     string tag_other;
     string dwg;
     string pos;
+    string type;
     string pipe_id;
     string other_id;
 };
@@ -20,7 +21,7 @@ ostream & operator<<(ostream & os, const data_line & d)
 {
     os<< d.tag_pipe << "\t" << d.pipe_id << "\t"
       << d.tag_other << "\t" << d.other_id << "\t"
-      << d.pos << "\t" << d.dwg;
+      << d.pos << "\t" << d.dwg << "\t" << d.type;
 
     return os;
 }
@@ -70,6 +71,7 @@ commands:\n\
     oi <id> : lists occurences of other id = <id>\n\
     l <line>: lists contents of line <line>\n\
     d <dwg> : lists lines where drawing = <dwg>\n\
+    h       : print this help.\n\
     q       : quit\n";
 
 
@@ -108,6 +110,7 @@ int main(int argc, char * argv[]){
         getline(s, d.tag_other, ';');
         getline(s, d.other_id, ';');
         getline(s, d.pos, ';');
+        getline(s, d.type, ';');
 
         list.push_front(d);
         counter++;
@@ -130,6 +133,7 @@ int main(int argc, char * argv[]){
         if ( op=="oi" ) {print_data(list, offsetof(data_line, other_id), data );continue;}
         if (op=="d") print_dwg(list,data);
         if (op=="l") print_line(list,data);
+        if (op=="h") cout << endl << usage << endl;
 
     }while(op != "q");
 
