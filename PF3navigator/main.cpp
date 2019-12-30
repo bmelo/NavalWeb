@@ -11,13 +11,13 @@
 using namespace std;
 
 struct Vertex{
-    Vertex(bool _isPipe = false):is_pipe(_isPipe){}
+
     string id;
     string tag;
     string dwg;
     string pos;
     string type;
-    bool is_pipe = false;
+
     bool operator==(const Vertex& rhs) const {return this->id == rhs.id;}
 };
 
@@ -37,38 +37,54 @@ commands:\n\
     <id> : lists adjacency list of of element <id>\n\
     q    : quit\n";
 
-void AddVertex(Graph& G, const Vertex& u, const Vertex& v){
+void AddRootVertex(Graph& G, const Vertex& u){
 
     auto it = G.find(u);
 
     // if the ID is not yet in the Graph as a root element
-    // insert it as a root in the list
+    // insert it as a root vertex in G
     if( it == G.end() ){
         AdjacencyList L;
-        L.push_front(v);
         G.insert( pair<Vertex,AdjacencyList>(u,L) );
     }
-    else
-    {
+}
+
+void AddVertex(Graph& G, const Vertex& u, const Vertex& v)
+{
+    auto it = G.find(u);
+
+    // if the ID is not yet in the Graph as a root element
+    // insert it as a root vertex in G
+    if( it != G.end() ){
         AdjacencyList& L = it->second;
         if ( find( L.begin(),L.end(), v ) == L.end() )
             it->second.push_front(v);
+        return;
     }
+
+    cout << "Error: u is not root vertex.\n";
+
 
 }
 
-void CreateGraphFromCSV(Graph& G, ifstream& file)
+void CreateGraphFromCSV(Graph& G, ifstream& file, int readtype)
 {
+    if ( readtype == 0) return;
+
+    file.clear();
+    file.seekg(0, ios::beg);
+
     auto begin = clock();
     string line;
     int counter = 0;
     getline(file,line);
+
     while ( getline(file,line))
     {
         if (line =="") continue;
         stringstream ss(line);
         string s;
-        Vertex pipe(true);
+        Vertex pipe;
         Vertex other;
 
         getline(ss, pipe.tag, ';');
@@ -79,18 +95,20 @@ void CreateGraphFromCSV(Graph& G, ifstream& file)
 
         getline(ss, other.tag, ';');
         getline(ss, other.id, ';');
-        getline(ss, s, ';');
-        other.pos = pipe.pos = s;
-        getline(ss, s, ';');
-        other.type = pipe.type = s; // TODO: correct after change DB dump
+        getline(ss, other.pos, ';');
+        getline(ss, other.type, ';');
 
-        AddVertex(G,pipe,other);
-        AddVertex(G,other,pipe);
+        if ( readtype == 3 ) AddRootVertex(G,other);
+        if ( readtype == 2 ) AddRootVertex(G,pipe);
+        if ( readtype == 1 ) {AddVertex(G,pipe,other);AddVertex(G,other,pipe);}
 
         counter++;
     }
     cout<< counter << " lines of data read in " << (clock() - begin) / static_cast<double>(CLOCKS_PER_SEC) << " seconds\n";
-    cout<< G.size() << " root elements found.\n";
+    cout<< G.size() << " root elements found in pass " << readtype << "\n";
+
+    CreateGraphFromCSV(G,file, --readtype);
+
 }
 void PrintGraph(const Graph& G){
     for(auto& p : G){
@@ -105,7 +123,7 @@ bool GetSubgraph(const Vertex& u, const Vertex& target, const Graph& G, Graph& H
 {
     if (u == target) return true;
     if ( find( whitelist.begin(), whitelist.end(), u.dwg ) == whitelist.end() ) return false;
-    if ( u.is_pipe && u.type == "Secondary Piping") return false;
+    if ( u.type == "Secondary Piping") return false;
 
     stack.push_front(u);
     bool is_path = false;
@@ -113,6 +131,8 @@ bool GetSubgraph(const Vertex& u, const Vertex& target, const Graph& G, Graph& H
     {
         if ( find( stack.begin(), stack.end(), v) == stack.end() && GetSubgraph(v,target,G,H,whitelist,stack) )
         {
+            AddRootVertex(H,u);
+            AddRootVertex(H,v);
             AddVertex(H,u,v);
             AddVertex(H,v,u);
             is_path = true;
@@ -176,6 +196,7 @@ bool ProcessInput(const Graph& G){
         Graph::const_iterator sit, tit;
         if ( (sit = G.find(start)) == G.end() ) {cout << "Start vertex not found.\n";return true;}
         if ( (tit = G.find(target)) == G.end() ){cout << "Target vertex not found.\n";return true;}
+        //const Vertex& x = sit->first;
         if ( find(wl.begin(),wl.end(), sit->first.dwg) == wl.end()) {cout << "Start iten dwg not in allowed list.\n";return true;}
         if ( find(wl.begin(),wl.end(), tit->first.dwg) == wl.end()) {cout << "Target iten dwg not in allowed list.\n";return true;}
 
@@ -204,7 +225,7 @@ int main(int argc, char* argv[])
     }
 
     Graph G;
-    CreateGraphFromCSV(G,file);
+    CreateGraphFromCSV(G,file,3);
     //PrintGraph(G);
 
     string op;
