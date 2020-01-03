@@ -13,15 +13,16 @@ struct data_line
     string tag_other;
     string dwg;
     string pos;
-    string type;
+    string type_pipe;
+    string type_other;
     string pipe_id;
     string other_id;
 };
 ostream & operator<<(ostream & os, const data_line & d)
 {
-    os<< d.tag_pipe << "\t" << d.pipe_id << "\t"
-      << d.tag_other << "\t" << d.other_id << "\t"
-      << d.pos << "\t" << d.dwg << "\t" << d.type;
+    os<< d.tag_pipe << "\t" << d.pipe_id << "\t" << d.type_pipe << "\t"
+      << d.tag_other << "\t" << d.other_id << "\t" << d.type_other << "\t"
+      << d.pos << "\t" << d.dwg;
 
     return os;
 }
@@ -100,17 +101,18 @@ int main(int argc, char * argv[]){
     {
         // used for breaking words
         stringstream s(line);
-        string crap;
+        string str;
         data_line d;
 
         getline(s, d.tag_pipe, ';');
         getline(s, d.pipe_id, ';');
-        getline(s, crap, ';');
+        getline(s, d.type_pipe, ';');
+        getline(s, str, ';');
         getline(s, d.dwg, ';');
         getline(s, d.tag_other, ';');
         getline(s, d.other_id, ';');
         getline(s, d.pos, ';');
-        getline(s, d.type, ';');
+        getline(s, d.type_other, ';');
 
         list.push_front(d);
         counter++;
