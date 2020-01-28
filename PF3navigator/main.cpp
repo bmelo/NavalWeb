@@ -341,9 +341,10 @@ bool ProcessInput(const Graph& G){
         string data;
         forward_list<string> dwg_wl; // drawing white list
         getline(s, data, ' ');
-        while (data != "q")
+        while (data != "")
         {
             dwg_wl.push_front(data);
+            data = "";
             getline(s, data, ' ');
         }
 
@@ -401,6 +402,8 @@ int main(int argc, char* argv[])
     return 0;
 
 }
+
+// p C558A0627C9446548B23254872701164 7E4CDFE4292B4A6C98287BF7C126B689 I-DE-3010.1M-5241-944-P4X-002 I-DE-3010.1M-5241-944-P4X-003 I-DE-3010.1M-5111-944-P4X-004
 
 
 
