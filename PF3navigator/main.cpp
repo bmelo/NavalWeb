@@ -19,8 +19,9 @@ struct Vertex{
     explicit Vertex(bool _ispipe = false):is_pipe(_ispipe){}
     string tag;
     string id;
-    string type;
     string dwg;
+    string type;
+
     //string pos;
 
     bool is_pipe;
@@ -36,14 +37,20 @@ struct Other : public Vertex
     Other():Vertex(false){}
 };
 
-struct hashVertex{
+struct hashVertexByRepID{
     size_t operator()(const Vertex& v) const{
         hash<string> hstr;
         return hstr(v.id);
     }
 };
+struct hashVertexTagDwg{
+    size_t operator()(const Vertex& v) const{
+        hash<string> hstr;
+        return hstr(v.tag+v.dwg);
+    }
+};
 using AdjacencyList = forward_list<Vertex>;
-using Graph = unordered_map<Vertex,AdjacencyList,hashVertex>;
+using Graph = unordered_map<Vertex,AdjacencyList,hashVertexByRepID>;
 
 const char * usage = "\
 PF3 - read and navigate through PF3 data\n\
@@ -78,12 +85,12 @@ void AddVertex(Graph& G, const Vertex& u, const Vertex& v)
         return;
     }
 
-    cout << "Error: u is not root vertex.\n";
+    cout << "Internal error: u is not root vertex.\n";
 }
 
 bool IsPipe( const string& type)
 {
-    string pl[] = { "Conditioned Air Return",
+    static const string pl[] = { "Conditioned Air Return",
                            "Secondary Piping",
                            "Primary Piping",
                            "OPC",
@@ -102,9 +109,9 @@ bool IsPipe( const string& type)
    else return false;
 }
 
-void CreateGraphFromCSV(Graph& G, ifstream& file, int readtype)
+void CreateGraphFromPF3CSV(Graph& G, ifstream& file, int readtype = 2)
 {
-    if ( readtype == 0) return;
+    if ( readtype == 0) return; // end of recursion
 
     file.clear();
     file.seekg(0, ios::beg);
@@ -125,21 +132,21 @@ void CreateGraphFromCSV(Graph& G, ifstream& file, int readtype)
         getline(ss, pipe.tag, ';');
         getline(ss, pipe.id, ';');
         getline(ss, pipe.type, ';');
-        getline(ss, s, ';');
-        getline(ss, pipe.dwg, ';');
-        //other.dwg = pipe.dwg = s;
+        getline(ss, s, ';'); // DIAM_SELF, not used
+        getline(ss, s, ';'); // Drawing, both pipe & other
+
+        other.dwg = pipe.dwg = s;
 
         getline(ss, other.tag, ';');
         getline(ss, other.id, ';');
         getline(ss, pos, ';');
         getline(ss, other.type, ';');
 
-        if ( readtype == 3 ) AddRootVertex(G,pipe);
-        if ( readtype == 2 ) AddRootVertex(G,other);
+        if ( readtype == 2 ) { AddRootVertex(G,pipe);AddRootVertex(G,other);}
         if ( readtype == 1 ) {
 
             auto it = G.find(other);
-            if (it->first.is_pipe)
+            if (it->first.is_pipe) // pipe connected to pipe
             {
                 other.is_pipe = true;
                 other.dwg = it->first.dwg;
@@ -267,10 +274,7 @@ bool GetSubgraph(   const Vertex& u,
     //    if ( u.type == "Connector" &&
     //        find( connector_wl.begin(), connector_wl.end(), u.tag ) == connector_wl.end() ) return false;
 
-    if (u.tag.substr(0,2) == "TQ" && !first )
-    {
-        return false;
-    }
+    if (u.tag.substr(0,2) == "TQ" && !first ) return false;
 
     first = false;
 
@@ -393,7 +397,7 @@ int main(int argc, char* argv[])
     }
 
     Graph G;
-    CreateGraphFromCSV(G,file,3);
+    CreateGraphFromPF3CSV(G,file);
     //PrintGraph(G);
 
     string op;
@@ -404,7 +408,7 @@ int main(int argc, char* argv[])
 }
 
 // p C558A0627C9446548B23254872701164 7E4CDFE4292B4A6C98287BF7C126B689 I-DE-3010.1M-5241-944-P4X-002 I-DE-3010.1M-5241-944-P4X-003 I-DE-3010.1M-5111-944-P4X-004
-
+// p AC5338F9ACA44CB5A89B9E8F8219E7B5 4F5CE0B4B3B449F8B46A0D9C568FC8EB I-DE-3010.1M-5335-944-P4X-001 I-DE-3010.1M-5271-944-P4X-001_1 I-DE-3010.1M-5271-944-P4X-001_3
 
 
 
