@@ -17,7 +17,7 @@ using namespace std;
 struct Vertex{
 
     explicit Vertex(bool _ispipe = false):is_pipe(_ispipe){}
-    string tag;
+    string tag = "No TAG";
     string id;
     string dwg;
     string type;
@@ -58,9 +58,9 @@ usage: PF3 <file name>\n\
 commands:\n\
     f <id> : list adjacency list of of element <id>\n\
     h      : print this help\n\
-    p <start id> <end id> [1..N]<allowed drawings> q [0..N]<excluded connectors> q\n\
-           : creates a sub-graph containing all paths that connect <start id> to <end id>,\n\
-             searching only in the <allowed drawings> list and breaking at <excluded connectors>.\n\
+    p <start_tag start_dwg> <target_tag target_dwg> [1..N]<additional drawings>\n\
+           : creates a sub-graph containing all paths that connect <start_tag> to <end_tag>,\n\
+             searching only in the start and end drawings and in the <additional drawings> list.\n\
     q      : quit\n";
 
 void AddRootVertex(Graph& G, const Vertex& u){
@@ -85,7 +85,7 @@ void AddVertex(Graph& G, const Vertex& u, const Vertex& v)
         return;
     }
 
-    cout << "Internal error: u is not root vertex.\n";
+    cout << "Internal error: u is not root vertex!\n";
 }
 
 bool IsPipe( const string& type)
@@ -109,7 +109,7 @@ bool IsPipe( const string& type)
    else return false;
 }
 
-void CreateGraphFromPF3CSV(Graph& G, ifstream& file, int readtype = 2)
+void CreateGraphFromPF3CSV(Graph& G, ifstream& file, int readtype = 3)
 {
     if ( readtype == 0) return; // end of recursion
 
@@ -142,17 +142,28 @@ void CreateGraphFromPF3CSV(Graph& G, ifstream& file, int readtype = 2)
         getline(ss, pos, ';');
         getline(ss, other.type, ';');
 
-        if ( readtype == 2 ) { AddRootVertex(G,pipe);AddRootVertex(G,other);}
+        /*
+         * 1st pass: reads all pipe data.
+         * 2nd pass: reads all "other" data. Other may be pipe,
+         * in this case its expected that it was already read as a
+         * root vertex in the 1st pass.
+         * 3rd pass: stablish the connections (edges) of the graph.
+         *
+         */
+
+        if ( readtype == 3 ) AddRootVertex(G,pipe);
+        if ( readtype == 2 ) AddRootVertex(G,other);
         if ( readtype == 1 ) {
-
+            // as said above, other may be a pipe
+            // in this case its "pipe" status is set
+            // before adding it to the graph
+            // note that no checking of "found?" is done
+            // since all individual items are added as roots
+            // in the graph
             auto it = G.find(other);
-            if (it->first.is_pipe) // pipe connected to pipe
-            {
+            if (it->first.is_pipe)
                 other.is_pipe = true;
-                other.dwg = it->first.dwg;
-            }
 
-            //if ( IsPipe(other.type) ) other.is_pipe = true;)
             // make it a directed graph
             if ( pos == "" )
             {
@@ -165,6 +176,11 @@ void CreateGraphFromPF3CSV(Graph& G, ifstream& file, int readtype = 2)
             // "Other" itens doesnt list their adjecency, but its possible to know it
             // inderictly: when a pipe reports a "other" in its from position
             // this pipe is at the "to" position of the "other".
+
+            // obs: pos == "in" is a repetition because if A goes to B the CSV has two entries
+            // A B Out (B is in the OUT position of A)
+            // B A In (A is in the IN position of B)
+
             if ( pos == "From") AddVertex(G,other,pipe);
 
         }
@@ -172,20 +188,20 @@ void CreateGraphFromPF3CSV(Graph& G, ifstream& file, int readtype = 2)
         counter++;
     }
     cout<< counter << " lines of data read in " << (clock() - begin) / static_cast<double>(CLOCKS_PER_SEC) << " seconds\n";
-    cout<< G.size() << " root elements found in pass " << readtype << "\n";
+    cout<< G.size() << " root elements found in pass " << 4-readtype << "\n";
 
-    CreateGraphFromCSV(G,file, --readtype);
+    CreateGraphFromPF3CSV(G,file, --readtype);
 
 }
 
-string getStrId(const Vertex& v)
-{
-    string s( v.tag );
-    s += "_";
-    s += v.id.substr(v.id.size()-4);
+//string getStrId(const Vertex& v)
+//{
+//    string s( v.tag );
+//    s += "_";
+//    s += v.id.substr(v.id.size()-4);
 
-    return s;
-}
+//    return s;
+//}
 
 void PrintGraphEdgeList(const Graph& G){
     for(auto& p : G){
@@ -285,10 +301,9 @@ bool GetSubgraph(   const Vertex& u,
 
     for( auto& v : G.at(u))
     {
-        if ( find( stack.begin(), stack.end(), v) == stack.end() &&
-        //GetSubgraph(v,target,G,H,drawing_wl,connector_wl,stack) )
-        GetSubgraph(v,target,G,H,drawing_wl,stack) )
-        {
+        if (    find( stack.begin(), stack.end(), v) == stack.end() &&
+                GetSubgraph(v,target,G,H,drawing_wl,stack) ) {
+
             AddRootVertex(H,u);
             AddRootVertex(H,v);
             AddVertex(H,u,v);
@@ -301,7 +316,20 @@ bool GetSubgraph(   const Vertex& u,
     return is_path;
 }
 
-
+bool getRepIDFromTagAndDWG(const Graph& G, Vertex& u){
+    // pair->first is the root vertex, pair->second
+    // is its adjacency list
+    for (const auto& pair : G)
+    {
+        const Vertex& v = pair.first;
+        if ( v.tag == u.tag && v.dwg == u.dwg )
+        {
+            u.id = v.id;
+            return true;
+        }
+    }
+    return false;
+}
 
 bool ProcessInput(const Graph& G){
     cout << ">";
@@ -339,11 +367,16 @@ bool ProcessInput(const Graph& G){
     if (command=="p"){
 
         Vertex start, target;
-        getline(s, start.id, ' ');
-        getline(s, target.id, ' ');
+        getline(s, start.tag, ' ');
+        getline(s, start.dwg, ' ');
+        getline(s, target.tag, ' ');
+        getline(s, target.dwg, ' ');
 
         string data;
         forward_list<string> dwg_wl; // drawing white list
+        dwg_wl.push_front(start.dwg);
+        dwg_wl.push_front(target.dwg);
+
         getline(s, data, ' ');
         while (data != "")
         {
@@ -352,27 +385,12 @@ bool ProcessInput(const Graph& G){
             getline(s, data, ' ');
         }
 
-//        forward_list<string> connector_wl; // connector black list
-//        getline(s, data, ' ');
-//        while (data != "q")
-//        {
-//            connector_wl.push_front(data);
-//            getline(s, data, ' ');
-//        }
-
-        // sanity check
-        Graph::const_iterator sit, tit;
-        if ( (sit = G.find(start)) == G.end() ) {cout << "Start vertex not found.\n";return true;}
-        if ( (tit = G.find(target)) == G.end() ){cout << "Target vertex not found.\n";return true;}
-        //const Vertex& x = sit->first;
-        if ( sit->first.is_pipe && find(dwg_wl.begin(),dwg_wl.end(), sit->first.dwg) == dwg_wl.end()) {cout << "Start iten dwg not in allowed list.\n";return true;}
-        if ( tit->first.is_pipe && find(dwg_wl.begin(),dwg_wl.end(), tit->first.dwg) == dwg_wl.end()) {cout << "Target iten dwg not in allowed list.\n";return true;}
-
+        if ( !getRepIDFromTagAndDWG(G,start)) {cout << "Start vertex not found.\n";return true;}
+        if ( !getRepIDFromTagAndDWG(G,target)) {cout << "Target vertex not found.\n";return true;}
 
         Graph H;
         auto begin = clock();
-        //GetSubgraph(sit->first,tit->first,G,H, dwg_wl,connector_wl);
-        GetSubgraph(sit->first,tit->first,G,H, dwg_wl);
+        GetSubgraph(start,target,G,H, dwg_wl);
         cutPipeLoops(H);
         PrintGraphSpreadsheet(H);
         cout<< "Command completed in " << (clock() - begin) / static_cast<double>(CLOCKS_PER_SEC) << " seconds\n";
@@ -407,7 +425,7 @@ int main(int argc, char* argv[])
 
 }
 
-// p C558A0627C9446548B23254872701164 7E4CDFE4292B4A6C98287BF7C126B689 I-DE-3010.1M-5241-944-P4X-002 I-DE-3010.1M-5241-944-P4X-003 I-DE-3010.1M-5111-944-P4X-004
+// p Z-5111502P I-DE-3010.1M-5111-944-P4X-004 GG-5241501A I-DE-3010.1M-5241-944-P4X-003 I-DE-3010.1M-5241-944-P4X-002
 // p AC5338F9ACA44CB5A89B9E8F8219E7B5 4F5CE0B4B3B449F8B46A0D9C568FC8EB I-DE-3010.1M-5335-944-P4X-001 I-DE-3010.1M-5271-944-P4X-001_1 I-DE-3010.1M-5271-944-P4X-001_3
 
 
