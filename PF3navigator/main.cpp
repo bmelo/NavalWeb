@@ -108,10 +108,10 @@ static bool IsPipe( const string& type)
 
 static void CreateGraphFromPF3CSV(Graph& G, ifstream& file, int readtype = 3)
 {
-    if ( readtype == 0) return; // end of recursion
+    if ( readtype == 0 ) return; // end of recursion
 
     file.clear();
-    file.seekg(0, ios::beg);
+    file.seekg(0, ios::beg );
 
     auto begin = clock();
     string line;
@@ -151,24 +151,22 @@ static void CreateGraphFromPF3CSV(Graph& G, ifstream& file, int readtype = 3)
         if ( readtype == 3 ) AddRootVertex(G,pipe);
         if ( readtype == 2 ) AddRootVertex(G,other);
         if ( readtype == 1 ) {
-            // as said above, other may be a pipe
-            // in this case its "pipe" status is set
-            // before adding it to the graph
-            // note that no checking of "found?" is done
-            // since all individual items are added as roots
-            // in the graph in reads 3 and 2
-            auto it = G.find(other);
-            if (it->first.is_pipe)
-                other.is_pipe = true;
+
+            // "other" nodes may have wrong dwg information, like OPCs
+            // to correct this and also to add is pipe data the other
+            // data is not added directly, instead its read from the
+            // data already stored in the graph
+
+            const auto& v = G.find(other)->first;
 
             // make it a directed graph
             if ( pos == "" )
             {
-                AddVertex(G,pipe,other);
-                AddVertex(G,other,pipe);
+                AddVertex(G,pipe,v);
+                AddVertex(G,v,pipe);
             }
             if ( pos == "To" || pos == "Out" || pos == "OPC" )
-                AddVertex(G,pipe,other);
+                AddVertex(G,pipe,v);
 
             // "Other" itens doesnt list their adjecency, but its possible to know it
             // inderictly: when a pipe reports a "other" in its from position
@@ -178,7 +176,7 @@ static void CreateGraphFromPF3CSV(Graph& G, ifstream& file, int readtype = 3)
             // A B Out (B is in the OUT position of A)
             // B A In (A is in the IN position of B)
 
-            if ( pos == "From") AddVertex(G,other,pipe);
+            if ( pos == "From") AddVertex(G,v,pipe);
 
         }
 
@@ -275,25 +273,38 @@ static bool GetSubgraph(   const Vertex& u,
                     const Graph& G,
                     Graph& H,
                     const forward_list<string>& drawing_wl,
-                    //const forward_list<string>& connector_wl,
+                    const forward_list<string>& connector_wl,
                     deque<Vertex> stack = deque<Vertex>())
 {
     if (u == target) return true;
 
     static bool first = true;
 
+
     if ( u.is_pipe &&
         find( drawing_wl.begin(), drawing_wl.end(), u.dwg ) == drawing_wl.end() ) return false;
 
-    if ( u.type == "Connector" )
+    /*if ( u.type == "OPC" )
     {
         // gets the connected connector
         auto& v = G.at(u).front();
-        // finds the current drawing
-        auto it = find( drawing_wl.begin(), drawing_wl.end(), u.dwg );
+        // if its a connector....
+        if ( v.type == "OPC")
+        {
+            // finds the current drawing
+            auto it = find( drawing_wl.begin(), drawing_wl.end(), u.dwg );
+            // gets the allowed next dwg
+            auto next_it = next(it);
+            // if this is the last dwg OR the the connected dwg is not in the right sequence...
+            if ( next_it == drawing_wl.end() ||  v.dwg != *next_it ) return false;
+        }
+    }*/
 
+    // connetor not found in connectors white list
+    if ( u.type == "OPC" &&
+        find( connector_wl.begin(), connector_wl.end(), u.tag ) == connector_wl.end() )
+        return false;
 
-    }
 
     if (u.tag.substr(0,2) == "TQ" && !first ) return false;
 
@@ -307,7 +318,7 @@ static bool GetSubgraph(   const Vertex& u,
     for( auto& v : G.at(u))
     {
         if (    find( stack.begin(), stack.end(), v) == stack.end() &&
-                GetSubgraph(v,target,G,H,drawing_wl,stack) ) {
+                GetSubgraph(v,target,G,H,drawing_wl,connector_wl, stack) ) {
 
             AddRootVertex(H,u);
             AddRootVertex(H,v);
@@ -379,23 +390,32 @@ static bool ProcessInput(const Graph& G){
 
         string data;
         forward_list<string> dwg_wl; // drawing white list
+        dwg_wl.push_front(target.dwg); // push_front in reverse order to be ordered
+
+        getline(s, data, ' ');
+        while (data != "c")
+        {
+            dwg_wl.push_front(data);
+            //data = "";
+            getline(s, data, ' ');
+        }
         dwg_wl.push_front(start.dwg);
 
+        forward_list<string> opc_wl; // Off Page Connector white list
         getline(s, data, ' ');
         while (data != "")
         {
-            dwg_wl.push_front(data);
+            opc_wl.push_front(data);
             data = "";
             getline(s, data, ' ');
         }
-        dwg_wl.push_front(target.dwg);
 
         if ( !getRepIDFromTagAndDWG(G,start)) {cout << "Start vertex not found.\n";return true;}
         if ( !getRepIDFromTagAndDWG(G,target)) {cout << "Target vertex not found.\n";return true;}
 
         Graph H;
         auto begin = clock();
-        GetSubgraph(start,target,G,H, dwg_wl);
+        GetSubgraph(start,target,G,H, dwg_wl, opc_wl);
         cutPipeLoops(H);
         PrintGraphSpreadsheet(H);
         cout<< "Command completed in " << (clock() - begin) / static_cast<double>(CLOCKS_PER_SEC) << " seconds\n";
@@ -431,7 +451,7 @@ int main(int argc, char* argv[])
 }
 
 // p Z-5111502P I-DE-3010.1M-5111-944-P4X-004 GG-5241501A I-DE-3010.1M-5241-944-P4X-003 I-DE-3010.1M-5241-944-P4X-002
-// p AC5338F9ACA44CB5A89B9E8F8219E7B5 4F5CE0B4B3B449F8B46A0D9C568FC8EB I-DE-3010.1M-5335-944-P4X-001 I-DE-3010.1M-5271-944-P4X-001_1 I-DE-3010.1M-5271-944-P4X-001_3
+// p Z-5335509S I-DE-3010.1M-5335-944-P4X-001 Z-5271505 I-DE-3010.1M-5271-944-P4X-001_1 I-DE-3010.1M-5271-944-P4X-001_3 c 8275 8017
 
 
 
