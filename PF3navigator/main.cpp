@@ -285,8 +285,15 @@ static bool GetSubgraph(   const Vertex& u,
     if ( u.is_pipe &&
         find( drawing_wl.begin(), drawing_wl.end(), u.dwg ) == drawing_wl.end() ) return false;
 
-    //    if ( u.type == "Connector" &&
-    //        find( connector_wl.begin(), connector_wl.end(), u.tag ) == connector_wl.end() ) return false;
+    if ( u.type == "Connector" )
+    {
+        // gets the connected connector
+        auto& v = G.at(u).front();
+        // finds the current drawing
+        auto it = find( drawing_wl.begin(), drawing_wl.end(), u.dwg );
+
+
+    }
 
     if (u.tag.substr(0,2) == "TQ" && !first ) return false;
 
@@ -373,7 +380,6 @@ static bool ProcessInput(const Graph& G){
         string data;
         forward_list<string> dwg_wl; // drawing white list
         dwg_wl.push_front(start.dwg);
-        dwg_wl.push_front(target.dwg);
 
         getline(s, data, ' ');
         while (data != "")
@@ -382,6 +388,7 @@ static bool ProcessInput(const Graph& G){
             data = "";
             getline(s, data, ' ');
         }
+        dwg_wl.push_front(target.dwg);
 
         if ( !getRepIDFromTagAndDWG(G,start)) {cout << "Start vertex not found.\n";return true;}
         if ( !getRepIDFromTagAndDWG(G,target)) {cout << "Target vertex not found.\n";return true;}
