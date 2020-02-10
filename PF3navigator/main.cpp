@@ -231,6 +231,7 @@ static int ListSize(const AdjacencyList& L)
 static void cutPipeLoops(Graph& G)
 {
    unordered_map<string,pair<int,int>> degrees;
+   // first, gets the in and out degrees for each node in the graph
    for(auto& p : G){
         const Vertex& root = p.first;
         AdjacencyList& L = p.second;
@@ -240,12 +241,14 @@ static void cutPipeLoops(Graph& G)
             degrees[v.id].first++;
         }
    }
-   vector<Vertex> to_removeG;
+
+   vector<Vertex> to_removeG; // root node to be removed from Graph
+
    for(auto& p : G){
         AdjacencyList& L = p.second;
         if ( ListSize(L) > 1 )
         {
-            vector<Vertex> to_removeL;
+            vector<Vertex> to_removeL; // nodes to be removed from adj. list
             for(auto v: L)
             {
 
