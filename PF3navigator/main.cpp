@@ -9,10 +9,7 @@
 #include <deque>
 #include <vector>
 
-
-
 using namespace std;
-
 
 struct Vertex{
 
@@ -52,7 +49,7 @@ struct hashVertexTagDwg{
 using AdjacencyList = forward_list<Vertex>;
 using Graph = unordered_map<Vertex,AdjacencyList,hashVertexByRepID>;
 
-const char * usage = "\
+static const char * usage = "\
 PF3 - read and navigate through PF3 data\n\
 usage: PF3 <file name>\n\
 commands:\n\
@@ -63,7 +60,7 @@ commands:\n\
              searching only in the start and end drawings and in the <additional drawings> list.\n\
     q      : quit\n";
 
-void AddRootVertex(Graph& G, const Vertex& u){
+static void AddRootVertex(Graph& G, const Vertex& u){
 
     auto it = G.find(u);
 
@@ -73,7 +70,7 @@ void AddRootVertex(Graph& G, const Vertex& u){
     }
 }
 
-void AddVertex(Graph& G, const Vertex& u, const Vertex& v)
+static void AddVertex(Graph& G, const Vertex& u, const Vertex& v)
 {
     auto it = G.find(u);
 
@@ -88,9 +85,9 @@ void AddVertex(Graph& G, const Vertex& u, const Vertex& v)
     cout << "Internal error: u is not root vertex!\n";
 }
 
-bool IsPipe( const string& type)
+static bool IsPipe( const string& type)
 {
-    static const string pl[] = { "Conditioned Air Return",
+    const string pl[] = { "Conditioned Air Return",
                            "Secondary Piping",
                            "Primary Piping",
                            "OPC",
@@ -109,7 +106,7 @@ bool IsPipe( const string& type)
    else return false;
 }
 
-void CreateGraphFromPF3CSV(Graph& G, ifstream& file, int readtype = 3)
+static void CreateGraphFromPF3CSV(Graph& G, ifstream& file, int readtype = 3)
 {
     if ( readtype == 0) return; // end of recursion
 
@@ -159,7 +156,7 @@ void CreateGraphFromPF3CSV(Graph& G, ifstream& file, int readtype = 3)
             // before adding it to the graph
             // note that no checking of "found?" is done
             // since all individual items are added as roots
-            // in the graph
+            // in the graph in reads 3 and 2
             auto it = G.find(other);
             if (it->first.is_pipe)
                 other.is_pipe = true;
@@ -203,14 +200,14 @@ void CreateGraphFromPF3CSV(Graph& G, ifstream& file, int readtype = 3)
 //    return s;
 //}
 
-void PrintGraphEdgeList(const Graph& G){
+static void PrintGraphEdgeList(const Graph& G){
     for(auto& p : G){
         for(auto& v : p.second)
             cout << p.first.id << "," << p.first.tag << "," << v.id << "," << v.tag << endl;
             //cout<< getStrId(p.first) << ";" << getStrId(v) << endl;
     }
 }
-void PrintGraphSpreadsheet(const Graph& G){
+static void PrintGraphSpreadsheet(const Graph& G){
     cout << "Id\tLabel\tIsPipe\n";
     for(auto& p : G){
         cout<< p.first.id << "\t" << p.first.tag;
@@ -226,14 +223,12 @@ void PrintGraphSpreadsheet(const Graph& G){
 
 }
 // gets the out degree of a root node
-int ListSize(const AdjacencyList& L)
+static int ListSize(const AdjacencyList& L)
 {
-    int counter = 0;
-    for(const auto& a: L) counter++;
-    return counter;
+    return static_cast<int>(distance(L.begin(),L.end()));
 }
 
-void cutPipeLoops(Graph& G)
+static void cutPipeLoops(Graph& G)
 {
    unordered_map<string,pair<int,int>> degrees;
    for(auto& p : G){
@@ -272,7 +267,7 @@ void cutPipeLoops(Graph& G)
     for(auto v : to_removeG) G.erase(v);
 }
 
-bool GetSubgraph(   const Vertex& u,
+static bool GetSubgraph(   const Vertex& u,
                     const Vertex& target,
                     const Graph& G,
                     Graph& H,
@@ -316,7 +311,7 @@ bool GetSubgraph(   const Vertex& u,
     return is_path;
 }
 
-bool getRepIDFromTagAndDWG(const Graph& G, Vertex& u){
+static bool getRepIDFromTagAndDWG(const Graph& G, Vertex& u){
     // pair->first is the root vertex, pair->second
     // is its adjacency list
     for (const auto& pair : G)
@@ -331,7 +326,7 @@ bool getRepIDFromTagAndDWG(const Graph& G, Vertex& u){
     return false;
 }
 
-bool ProcessInput(const Graph& G){
+static bool ProcessInput(const Graph& G){
     cout << ">";
     string line;
     getline(cin,line);
